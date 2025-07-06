@@ -55,6 +55,6 @@ python claude_tk_app.py
 - Anthropic APIキーが必要です
 - インターネット接続が必要です
 - 質問1回につき回答1回の形式です
-- 使用するモデル: claude-3-5-sonnet-20241022
+- 使用するモデル: claude-sonnet-4-20250514
 - Anthropic公式Pythonライブラリを使用
 - Markdown変換には`markdown`ライブラリを使用 
