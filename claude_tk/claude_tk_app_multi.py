@@ -172,7 +172,7 @@ class ClaudeChatApp:
         self.exit_button.pack(side=tk.LEFT)
         
         # Enterキーで質問送信
-        self.question_text.bind('<Control-Return>', lambda e: self.send_question())
+        self.question_text.bind('<Control-Return>', lambda e: self.send_question() or "break")
     
     def update_history_display(self):
         """会話履歴の表示を更新"""

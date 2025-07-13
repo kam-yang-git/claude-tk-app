@@ -1,18 +1,15 @@
 import tkinter as tk
-from tkinter import ttk, scrolledtext, messagebox, filedialog
+from tkinter import ttk, scrolledtext, messagebox
 import os
 import anthropic
 import markdown
 import re
-import base64
 from dotenv import load_dotenv
-from PIL import Image, ImageTk
-import io
 
 class ClaudeChatApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("Claude Chat App with Image Support")
+        self.root.title("Claude Chat App")
         self.root.geometry("1000x700")
         
         # API設定
@@ -24,11 +21,7 @@ class ClaudeChatApp:
             return
         
         self.client = anthropic.Anthropic(api_key=self.api_key)
-        self.model = "claude-sonnet-4-20250514"  # 画像対応モデル
-        
-        # 画像関連の変数
-        self.selected_image_path = None
-        self.image_data = None
+        self.model = "claude-sonnet-4-20250514"
         
         self.setup_ui()
         self.center_window()
@@ -82,63 +75,11 @@ class ClaudeChatApp:
         
         # 余分な改行を整理
         text = re.sub(r'\n\s*\n\s*\n', '\n\n', html)
+
+        # 行頭の「- 」や「* 」を「・」に置換
+        text = re.sub(r'^[\-\*]\s+', '・', text, flags=re.MULTILINE)
         
         return text.strip()
-    
-    def select_image(self):
-        """画像を選択する"""
-        file_path = filedialog.askopenfilename(
-            title="画像を選択",
-            filetypes=[
-                ("画像ファイル", "*.png *.jpg *.jpeg *.gif *.bmp *.webp"),
-                ("すべてのファイル", "*.*")
-            ]
-        )
-        
-        if file_path:
-            try:
-                # 画像を読み込み
-                with open(file_path, "rb") as image_file:
-                    self.image_data = base64.b64encode(image_file.read()).decode('utf-8')
-                
-                self.selected_image_path = file_path
-                
-                # プレビューを更新
-                self.update_image_preview()
-                
-                # ファイル名を表示
-                filename = os.path.basename(file_path)
-                self.image_label.config(text=f"選択された画像: {filename}")
-                
-            except Exception as e:
-                messagebox.showerror("エラー", f"画像の読み込みに失敗しました: {str(e)}")
-    
-    def update_image_preview(self):
-        """画像プレビューを更新する"""
-        if self.selected_image_path:
-            try:
-                # 画像を読み込み、リサイズ
-                image = Image.open(self.selected_image_path)
-                
-                # プレビュー用にリサイズ（最大200x200）
-                image.thumbnail((200, 200), Image.Resampling.LANCZOS)
-                
-                # PhotoImageに変換
-                photo = ImageTk.PhotoImage(image)
-                
-                # プレビューラベルに表示
-                self.preview_label.config(image=photo, text="")
-                self.preview_label.image = photo  # 参照を保持
-                
-            except Exception as e:
-                self.preview_label.config(image="", text="プレビューエラー")
-    
-    def remove_image(self):
-        """選択された画像を削除する"""
-        self.selected_image_path = None
-        self.image_data = None
-        self.image_label.config(text="画像が選択されていません")
-        self.preview_label.config(image="", text="画像プレビュー")
     
     def setup_ui(self):
         # メインフレーム
@@ -157,45 +98,16 @@ class ClaudeChatApp:
         question_frame = ttk.LabelFrame(main_frame, text="質問", padding="5")
         question_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S), padx=(0, 5))
         
-        # 画像選択フレーム
-        image_frame = ttk.Frame(question_frame)
-        image_frame.grid(row=0, column=0, sticky=(tk.W, tk.E), pady=(0, 5))
-        
-        ttk.Button(
-            image_frame, 
-            text="画像を選択", 
-            command=self.select_image
-        ).pack(side=tk.LEFT, padx=(0, 5))
-        
-        ttk.Button(
-            image_frame, 
-            text="画像を削除", 
-            command=self.remove_image
-        ).pack(side=tk.LEFT)
-        
-        # 画像情報ラベル
-        self.image_label = ttk.Label(image_frame, text="画像が選択されていません")
-        self.image_label.pack(side=tk.LEFT, padx=(10, 0))
-        
-        # 画像プレビューフレーム
-        preview_frame = ttk.LabelFrame(question_frame, text="画像プレビュー", padding="5")
-        preview_frame.grid(row=1, column=0, sticky=(tk.W, tk.E), pady=(0, 5))
-        
-        self.preview_label = ttk.Label(preview_frame, text="画像プレビュー", width=30)
-        self.preview_label.pack()
-        
-        # 質問テキストエリア
         self.question_text = scrolledtext.ScrolledText(
             question_frame, 
             wrap=tk.WORD, 
             width=40, 
-            height=15,
+            height=20,
             font=("Arial", 10)
         )
-        self.question_text.grid(row=2, column=0, sticky=(tk.W, tk.E, tk.N, tk.S), pady=(5, 0))
-        
+        self.question_text.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
         question_frame.columnconfigure(0, weight=1)
-        question_frame.rowconfigure(2, weight=1)
+        question_frame.rowconfigure(0, weight=1)
         
         # 回答欄（右半分）
         answer_frame = ttk.LabelFrame(main_frame, text="回答", padding="5")
@@ -238,6 +150,9 @@ class ClaudeChatApp:
             command=self.root.destroy
         )
         self.exit_button.pack(side=tk.LEFT)
+        
+        # Ctrl+Enterで質問送信
+        self.question_text.bind('<Control-Return>', lambda e: self.send_question() or "break")
     
     def send_question(self):
         question = self.question_text.get("1.0", tk.END).strip()
@@ -250,32 +165,6 @@ class ClaudeChatApp:
         self.root.config(cursor="wait")
         
         try:
-            # メッセージの内容を構築
-            content = [{"type": "text", "text": question}]
-            
-            # 画像がある場合は追加
-            if self.image_data:
-                # 画像のMIMEタイプを判定
-                file_extension = os.path.splitext(self.selected_image_path)[1].lower()
-                mime_type_map = {
-                    '.png': 'image/png',
-                    '.jpg': 'image/jpeg',
-                    '.jpeg': 'image/jpeg',
-                    '.gif': 'image/gif',
-                    '.bmp': 'image/bmp',
-                    '.webp': 'image/webp'
-                }
-                mime_type = mime_type_map.get(file_extension, 'image/jpeg')
-                
-                content.append({
-                    "type": "image",
-                    "source": {
-                        "type": "base64",
-                        "media_type": mime_type,
-                        "data": self.image_data
-                    }
-                })
-            
             # APIリクエスト
             message = self.client.messages.create(
                 model=self.model,
@@ -283,7 +172,7 @@ class ClaudeChatApp:
                 messages=[
                     {
                         "role": "user",
-                        "content": content
+                        "content": question
                     }
                 ]
             )
@@ -312,9 +201,6 @@ class ClaudeChatApp:
         self.answer_text.config(state=tk.NORMAL)
         self.answer_text.delete("1.0", tk.END)
         self.answer_text.config(state=tk.DISABLED)
-        
-        # 画像もリセット
-        self.remove_image()
 
 def main():
     root = tk.Tk()
