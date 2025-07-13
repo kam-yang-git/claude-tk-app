@@ -220,7 +220,7 @@ class ClaudeChatApp:
             for msg in self.conversation_history:
                 messages.append({
                     "role": msg["role"],
-                    "content": msg["content"]
+                    "content": msg["content"] if msg["role"] == "user" else msg.get("markdown", msg["content"])
                 })
             
             # APIリクエスト
@@ -235,8 +235,8 @@ class ClaudeChatApp:
             # Markdownをプレーンテキストに変換
             plain_text = self.markdown_to_text(answer)
             
-            # 会話履歴に回答を追加
-            self.conversation_history.append({"role": "assistant", "content": plain_text})
+            # 会話履歴に回答を追加（plain_textとmarkdown両方保持）
+            self.conversation_history.append({"role": "assistant", "content": plain_text, "markdown": answer})
             
             # 履歴表示を更新
             self.update_history_display()
@@ -278,45 +278,119 @@ class ClaudeChatApp:
             self.latest_answer_text.master.grid_remove()
 
     def save_conversation_history(self):
-        """会話履歴をファイルに保存"""
+        """会話履歴をファイルに保存（Markdown/JSON/両方選択可）"""
         if not self.conversation_history:
             return False
-        
-        # デフォルトのファイル名を生成（現在の日時を含む）
-        default_filename = f"claude_conversation_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
-        
-        # ファイル保存ダイアログを表示
-        file_path = filedialog.asksaveasfilename(
-            title="会話履歴を保存",
-            defaultextension=".json",
-            filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
-            initialfile=default_filename
-        )
-        
-        if file_path:
-            try:
-                # 保存データを準備
-                save_data = {
-                    "metadata": {
-                        "created_at": datetime.now().isoformat(),
-                        "model": self.model,
-                        "total_messages": len(self.conversation_history)
-                    },
-                    "conversation": self.conversation_history
-                }
-                
-                # JSONファイルに保存
-                with open(file_path, 'w', encoding='utf-8') as f:
-                    json.dump(save_data, f, ensure_ascii=False, indent=2)
-                
-                messagebox.showinfo("保存完了", f"会話履歴を保存しました:\n{file_path}")
-                return True
-                
-            except Exception as e:
-                messagebox.showerror("保存エラー", f"ファイルの保存に失敗しました:\n{str(e)}")
-                return False
-        
-        return False
+
+        # 保存形式を選択
+        save_type = self.ask_save_format()
+        if save_type is None:
+            return False  # キャンセル
+
+        # デフォルトのファイル名
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        default_json = f"claude_conversation_{timestamp}.json"
+        default_md = f"claude_conversation_{timestamp}.md"
+
+        result = True
+        if save_type in ("json", "both"):
+            file_path = filedialog.asksaveasfilename(
+                title="会話履歴をJSONで保存",
+                defaultextension=".json",
+                filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
+                initialfile=default_json
+            )
+            if file_path:
+                try:
+                    # JSON用: assistantはMarkdownのまま
+                    save_data = {
+                        "metadata": {
+                            "created_at": datetime.now().isoformat(),
+                            "model": self.model,
+                            "total_messages": len(self.conversation_history)
+                        },
+                        "conversation": [
+                            dict(msg) if msg["role"] == "user" else {
+                                "role": "assistant",
+                                "content": msg.get("markdown", msg["content"])
+                            }
+                            for msg in self.conversation_history
+                        ]
+                    }
+                    with open(file_path, 'w', encoding='utf-8') as f:
+                        json.dump(save_data, f, ensure_ascii=False, indent=2)
+                except Exception as e:
+                    messagebox.showerror("保存エラー", f"JSON保存に失敗しました:\n{str(e)}")
+                    result = False
+            elif save_type == "json":
+                return False  # キャンセル
+
+        if save_type in ("markdown", "both"):
+            file_path = filedialog.asksaveasfilename(
+                title="会話履歴をMarkdownで保存",
+                defaultextension=".md",
+                filetypes=[("Markdown files", "*.md"), ("All files", "*.*")],
+                initialfile=default_md
+            )
+            if file_path:
+                try:
+                    # Markdown用: 質問・回答ペアで整形
+                    md_lines = []
+                    pair_num = 0
+                    for msg in self.conversation_history:
+                        if msg["role"] == "user":
+                            pair_num += 1
+                            md_lines.append(f"## 質問{pair_num}\n{msg['content']}\n")
+                        else:
+                            md = msg.get("markdown", msg["content"])
+                            md_lines.append(f"## 回答{pair_num}\n{md}\n")
+                    with open(file_path, 'w', encoding='utf-8') as f:
+                        f.write('\n'.join(md_lines))
+                except Exception as e:
+                    messagebox.showerror("保存エラー", f"Markdown保存に失敗しました:\n{str(e)}")
+                    result = False
+            elif save_type == "markdown":
+                return False  # キャンセル
+
+        if result:
+            messagebox.showinfo("保存完了", "会話履歴を保存しました。")
+        return result
+
+    def ask_save_format(self):
+        """保存形式を選択するダイアログ"""
+        win = tk.Toplevel(self.root)
+        win.title("保存形式の選択")
+        win.grab_set()
+        win.geometry("320x160")
+        # 画面中央に配置
+        win.update_idletasks()
+        w = win.winfo_width()
+        h = win.winfo_height()
+        x = (win.winfo_screenwidth() // 2) - (w // 2)
+        y = (win.winfo_screenheight() // 2) - (h // 2)
+        win.geometry(f"320x160+{x}+{y}")
+        label = ttk.Label(win, text="会話履歴の保存形式を選択してください:")
+        label.pack(pady=10)
+        var = tk.StringVar(value="markdown")
+        rb1 = ttk.Radiobutton(win, text="Markdown形式で保存", variable=var, value="markdown")
+        rb2 = ttk.Radiobutton(win, text="JSON形式で保存", variable=var, value="json")
+        rb3 = ttk.Radiobutton(win, text="両方保存", variable=var, value="both")
+        rb1.pack(anchor=tk.W, padx=30)
+        rb2.pack(anchor=tk.W, padx=30)
+        rb3.pack(anchor=tk.W, padx=30)
+        result = {"value": None}
+        def ok():
+            result["value"] = var.get()
+            win.destroy()
+        def cancel():
+            result["value"] = None
+            win.destroy()
+        btn_frame = ttk.Frame(win)
+        btn_frame.pack(pady=10)
+        ttk.Button(btn_frame, text="OK", command=ok).pack(side=tk.LEFT, padx=10)
+        ttk.Button(btn_frame, text="キャンセル", command=cancel).pack(side=tk.LEFT)
+        win.wait_window()
+        return result["value"]
 
     def prompt_save_conversation(self, action_name):
         """会話履歴の保存を確認"""
