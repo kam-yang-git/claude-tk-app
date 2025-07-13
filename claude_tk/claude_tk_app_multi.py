@@ -1,9 +1,11 @@
 import tkinter as tk
-from tkinter import ttk, scrolledtext, messagebox
+from tkinter import ttk, scrolledtext, messagebox, filedialog
 import os
 import anthropic
 import markdown
 import re
+import json
+from datetime import datetime
 from dotenv import load_dotenv
 
 class ClaudeChatApp:
@@ -167,7 +169,7 @@ class ClaudeChatApp:
         self.exit_button = ttk.Button(
             button_frame, 
             text="終了する", 
-            command=self.root.destroy
+            command=self.exit_application
         )
         self.exit_button.pack(side=tk.LEFT)
         
@@ -263,6 +265,9 @@ class ClaudeChatApp:
     
     def clear_conversation(self):
         """会話履歴をクリア"""
+        if not self.prompt_save_conversation("会話クリア"):
+            return
+        
         if messagebox.askyesno("確認", "会話履歴をクリアしますか？"):
             self.conversation_history = []
             self.update_history_display()
@@ -271,6 +276,75 @@ class ClaudeChatApp:
             self.latest_answer_text.delete("1.0", tk.END)
             self.latest_answer_text.config(state=tk.DISABLED)
             self.latest_answer_text.master.grid_remove()
+
+    def save_conversation_history(self):
+        """会話履歴をファイルに保存"""
+        if not self.conversation_history:
+            return False
+        
+        # デフォルトのファイル名を生成（現在の日時を含む）
+        default_filename = f"claude_conversation_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        
+        # ファイル保存ダイアログを表示
+        file_path = filedialog.asksaveasfilename(
+            title="会話履歴を保存",
+            defaultextension=".json",
+            filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
+            initialfile=default_filename
+        )
+        
+        if file_path:
+            try:
+                # 保存データを準備
+                save_data = {
+                    "metadata": {
+                        "created_at": datetime.now().isoformat(),
+                        "model": self.model,
+                        "total_messages": len(self.conversation_history)
+                    },
+                    "conversation": self.conversation_history
+                }
+                
+                # JSONファイルに保存
+                with open(file_path, 'w', encoding='utf-8') as f:
+                    json.dump(save_data, f, ensure_ascii=False, indent=2)
+                
+                messagebox.showinfo("保存完了", f"会話履歴を保存しました:\n{file_path}")
+                return True
+                
+            except Exception as e:
+                messagebox.showerror("保存エラー", f"ファイルの保存に失敗しました:\n{str(e)}")
+                return False
+        
+        return False
+
+    def prompt_save_conversation(self, action_name):
+        """会話履歴の保存を確認"""
+        if not self.conversation_history:
+            return True  # 履歴がない場合はそのまま実行
+        
+        # 保存するかどうかを確認
+        result = messagebox.askyesnocancel(
+            "会話履歴の保存",
+            f"{action_name}前に会話履歴を保存しますか？\n\n"
+            f"「はい」: 保存してから{action_name}\n"
+            f"「いいえ」: 保存せずに{action_name}\n"
+            f"「キャンセル」: {action_name}をキャンセル"
+        )
+        
+        if result is None:  # キャンセル
+            return False
+        elif result:  # はい（保存する）
+            return self.save_conversation_history()
+        else:  # いいえ（保存しない）
+            return True
+
+    def exit_application(self):
+        """アプリケーションを終了"""
+        if not self.prompt_save_conversation("終了"):
+            return
+        
+        self.root.destroy()
 
 def main():
     root = tk.Tk()
