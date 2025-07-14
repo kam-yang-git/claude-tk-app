@@ -165,7 +165,15 @@ class ClaudeChatApp:
             command=self.clear_conversation
         )
         self.clear_button.pack(side=tk.LEFT, padx=(0, 10))
-        
+
+        # 「会話を再開」ボタン
+        self.resume_button = ttk.Button(
+            button_frame,
+            text="会話を再開",
+            command=self.resume_conversation
+        )
+        self.resume_button.pack(side=tk.LEFT, padx=(0, 10))
+
         self.exit_button = ttk.Button(
             button_frame, 
             text="終了する", 
@@ -419,6 +427,59 @@ class ClaudeChatApp:
             return
         
         self.root.destroy()
+
+    def resume_conversation(self):
+        """JSONファイルから会話履歴をインポートして再開"""
+        file_path = filedialog.askopenfilename(
+            title="会話履歴ファイル（JSON）を選択してください",
+            defaultextension=".json",
+            filetypes=[("JSON files", "*.json"), ("All files", "*.*")]
+        )
+        if not file_path:
+            return  # キャンセル
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            # conversationキーがあればそれを使う
+            conversation = data.get("conversation", data)
+            # conversationはリストであることを確認
+            if not isinstance(conversation, list):
+                raise ValueError("不正な会話履歴ファイルです（conversationがリストではありません）")
+            # 各メッセージのroleとcontent/markdownを検証
+            new_history = []
+            for msg in conversation:
+                if not isinstance(msg, dict) or "role" not in msg or "content" not in msg:
+                    raise ValueError("不正な会話履歴ファイルです（メッセージ形式エラー）")
+                # assistantの場合はmarkdownも保持
+                if msg["role"] == "assistant":
+                    new_history.append({
+                        "role": "assistant",
+                        "content": self.markdown_to_text(msg.get("content", "")),
+                        "markdown": msg.get("content", "")
+                    })
+                else:
+                    new_history.append({
+                        "role": "user",
+                        "content": msg["content"]
+                    })
+            self.conversation_history = new_history
+            self.update_history_display()
+            # 最新回答欄も更新
+            last_assistant = next((m for m in reversed(self.conversation_history) if m["role"] == "assistant"), None)
+            if last_assistant:
+                self.latest_answer_text.config(state=tk.NORMAL)
+                self.latest_answer_text.delete("1.0", tk.END)
+                self.latest_answer_text.insert("1.0", last_assistant["content"])
+                self.latest_answer_text.config(state=tk.DISABLED)
+                self.latest_answer_text.master.grid()
+            else:
+                self.latest_answer_text.config(state=tk.NORMAL)
+                self.latest_answer_text.delete("1.0", tk.END)
+                self.latest_answer_text.config(state=tk.DISABLED)
+                self.latest_answer_text.master.grid_remove()
+            messagebox.showinfo("インポート完了", "会話履歴を再開しました。")
+        except Exception as e:
+            messagebox.showerror("インポートエラー", f"会話履歴のインポートに失敗しました:\n{str(e)}")
 
 def main():
     root = tk.Tk()
