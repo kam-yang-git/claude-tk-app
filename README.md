@@ -174,6 +174,7 @@ python claude_tk_app_multi_image.py
 - Markdown変換には`markdown`ライブラリを使用
 - 画像対応版には`Pillow`ライブラリが必要
 - すべてのバージョンでCtrl+Enterで質問送信可能
+- 注意: Markdownの表や複雑なコードブロックは正しく表示されない場合があります（テキスト変換の都合上）。
 
 ## 会話履歴の保存・復元（画像・Markdown・zip対応）
 
