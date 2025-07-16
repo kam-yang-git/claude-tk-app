@@ -9,6 +9,9 @@ from datetime import datetime
 from dotenv import load_dotenv
 from PIL import Image, ImageTk  # 画像表示用
 import base64
+import shutil
+import tempfile
+import zipfile
 
 class ClaudeChatApp:
     def __init__(self, root):
@@ -31,6 +34,8 @@ class ClaudeChatApp:
         self.conversation_history = []
         self.attached_image_path = None
         self.attached_image_preview = None
+        self.history_images = []  # 履歴欄の画像参照保持用
+        self._imported_tempdir = None  # zip復元用一時ディレクトリ参照
         
         self.setup_ui()
         self.center_window()
@@ -177,6 +182,7 @@ class ClaudeChatApp:
     def update_history_display(self):
         self.history_text.config(state=tk.NORMAL)
         self.history_text.delete("1.0", tk.END)
+        self.history_images.clear()  # 画像参照をクリア
         pair_num = 0
         for msg in self.conversation_history:
             if msg["role"] == "user":
@@ -184,7 +190,15 @@ class ClaudeChatApp:
                 self.history_text.insert(tk.END, f"【質問 {pair_num}】\n", "user")
                 self.history_text.insert(tk.END, f"{msg['content']}\n", "user_content")
                 if msg.get("image_path"):
-                    self.history_text.insert(tk.END, f"[画像添付: {os.path.basename(msg['image_path'])}]\n", "user_image")
+                    try:
+                        img = Image.open(msg["image_path"])
+                        img.thumbnail((200, 200))
+                        photo = ImageTk.PhotoImage(img)
+                        self.history_images.append(photo)  # 参照保持
+                        self.history_text.image_create(tk.END, image=photo)
+                        self.history_text.insert(tk.END, "\n", "user_image")
+                    except Exception as e:
+                        self.history_text.insert(tk.END, f"[画像表示エラー: {os.path.basename(msg['image_path'])}]\n", "user_image")
                 self.history_text.insert(tk.END, "\n")
             else:
                 self.history_text.insert(tk.END, f"【回答 {pair_num}】\n", "assistant")
@@ -289,61 +303,105 @@ class ClaudeChatApp:
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         default_json = f"claude_conversation_{timestamp}.json"
         default_md = f"claude_conversation_{timestamp}.md"
+        default_json_zip = f"claude_conversation_{timestamp}_json.zip"
+        default_md_zip = f"claude_conversation_{timestamp}_md.zip"
         result = True
         if save_type in ("json", "both"):
             file_path = filedialog.asksaveasfilename(
-                title="会話履歴をJSONで保存",
-                defaultextension=".json",
-                filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
-                initialfile=default_json
+                title="会話履歴をZIPで保存",
+                defaultextension=".zip",
+                filetypes=[("ZIP files", "*.zip"), ("All files", "*.*")],
+                initialfile=default_json_zip
             )
             if file_path:
                 try:
-                    save_data = {
-                        "metadata": {
-                            "created_at": datetime.now().isoformat(),
-                            "model": self.model,
-                            "total_messages": len(self.conversation_history)
-                        },
-                        "conversation": [
-                            dict(msg) if msg["role"] == "user" else {
-                                "role": "assistant",
-                                "content": msg.get("markdown", msg["content"])
-                            }
-                            for msg in self.conversation_history
-                        ]
-                    }
-                    with open(file_path, 'w', encoding='utf-8') as f:
-                        json.dump(save_data, f, ensure_ascii=False, indent=2)
+                    with tempfile.TemporaryDirectory() as tmpdir:
+                        img_dir = os.path.join(tmpdir, "img")
+                        os.makedirs(img_dir, exist_ok=True)
+                        # JSONデータ作成
+                        save_data = {
+                            "metadata": {
+                                "created_at": datetime.now().isoformat(),
+                                "model": self.model,
+                                "total_messages": len(self.conversation_history)
+                            },
+                            "conversation": []
+                        }
+                        for msg in self.conversation_history:
+                            if msg["role"] == "user" and msg.get("image_path"):
+                                img_filename = os.path.basename(msg["image_path"])
+                                img_dst = os.path.join(img_dir, img_filename)
+                                shutil.copy2(msg["image_path"], img_dst)
+                                msg_copy = dict(msg)
+                                msg_copy["image_path"] = f"img/{img_filename}"
+                                save_data["conversation"].append(msg_copy)
+                            elif msg["role"] == "assistant":
+                                save_data["conversation"].append({
+                                    "role": "assistant",
+                                    "content": msg.get("markdown", msg["content"])
+                                })
+                            else:
+                                save_data["conversation"].append(dict(msg))
+                        json_path = os.path.join(tmpdir, default_json)
+                        with open(json_path, 'w', encoding='utf-8') as f:
+                            json.dump(save_data, f, ensure_ascii=False, indent=2)
+                        # zip作成
+                        with zipfile.ZipFile(file_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                            zipf.write(json_path, arcname=default_json)
+                            for root, _, files in os.walk(img_dir):
+                                for fname in files:
+                                    fpath = os.path.join(root, fname)
+                                    arcname = os.path.relpath(fpath, tmpdir)
+                                    zipf.write(fpath, arcname=arcname)
                 except Exception as e:
-                    messagebox.showerror("保存エラー", f"JSON保存に失敗しました:\n{str(e)}")
+                    messagebox.showerror("保存エラー", f"ZIP保存に失敗しました:\n{str(e)}")
                     result = False
             elif save_type == "json":
                 return False
         if save_type in ("markdown", "both"):
             file_path = filedialog.asksaveasfilename(
-                title="会話履歴をMarkdownで保存",
-                defaultextension=".md",
-                filetypes=[("Markdown files", "*.md"), ("All files", "*.*")],
-                initialfile=default_md
+                title="会話履歴をMarkdown ZIPで保存",
+                defaultextension=".zip",
+                filetypes=[("ZIP files", "*.zip"), ("All files", "*.*")],
+                initialfile=default_md_zip
             )
             if file_path:
                 try:
-                    md_lines = []
-                    pair_num = 0
-                    for msg in self.conversation_history:
-                        if msg["role"] == "user":
-                            pair_num += 1
-                            md_lines.append(f"## 質問{pair_num}\n{msg['content']}")
-                            if msg.get("image_path"):
-                                md_lines.append(f"![添付画像]({msg['image_path']})")
-                        else:
-                            md = msg.get("markdown", msg["content"])
-                            md_lines.append(f"## 回答{pair_num}\n{md}")
-                    with open(file_path, 'w', encoding='utf-8') as f:
-                        f.write('\n'.join(md_lines))
+                    with tempfile.TemporaryDirectory() as tmpdir:
+                        md_name = os.path.splitext(os.path.basename(file_path))[0] + ".md"
+                        md_path = os.path.join(tmpdir, md_name)
+                        img_dir = os.path.join(tmpdir, "img")
+                        os.makedirs(img_dir, exist_ok=True)
+                        md_lines = []
+                        pair_num = 0
+                        for msg in self.conversation_history:
+                            if msg["role"] == "user":
+                                pair_num += 1
+                                md_lines.append(f"## 質問{pair_num}\n{msg['content']}")
+                                if msg.get("image_path"):
+                                    img_filename = os.path.basename(msg["image_path"])
+                                    img_dst = os.path.join(img_dir, img_filename)
+                                    try:
+                                        if not os.path.exists(img_dst):
+                                            shutil.copy2(msg["image_path"], img_dst)
+                                        md_lines.append(f"![添付画像](img/{img_filename})")
+                                    except Exception as e:
+                                        md_lines.append(f"[画像保存エラー: {img_filename}]")
+                            else:
+                                md = msg.get("markdown", msg["content"])
+                                md_lines.append(f"## 回答{pair_num}\n{md}")
+                        with open(md_path, 'w', encoding='utf-8') as f:
+                            f.write('\n'.join(md_lines))
+                        # zip化
+                        with zipfile.ZipFile(file_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                            zipf.write(md_path, arcname=md_name)
+                            for root, _, files in os.walk(img_dir):
+                                for fname in files:
+                                    fpath = os.path.join(root, fname)
+                                    arcname = os.path.relpath(fpath, tmpdir)
+                                    zipf.write(fpath, arcname=arcname)
                 except Exception as e:
-                    messagebox.showerror("保存エラー", f"Markdown保存に失敗しました:\n{str(e)}")
+                    messagebox.showerror("保存エラー", f"Markdown ZIP保存に失敗しました:\n{str(e)}")
                     result = False
             elif save_type == "markdown":
                 return False
@@ -366,7 +424,7 @@ class ClaudeChatApp:
         label.pack(pady=10)
         var = tk.StringVar(value="markdown")
         rb1 = ttk.Radiobutton(win, text="Markdown形式で保存", variable=var, value="markdown")
-        rb2 = ttk.Radiobutton(win, text="JSON形式で保存", variable=var, value="json")
+        rb2 = ttk.Radiobutton(win, text="ZIP形式で保存", variable=var, value="zip")
         rb3 = ttk.Radiobutton(win, text="両方保存", variable=var, value="both")
         rb1.pack(anchor=tk.W, padx=30)
         rb2.pack(anchor=tk.W, padx=30)
@@ -409,49 +467,55 @@ class ClaudeChatApp:
 
     def resume_conversation(self):
         file_path = filedialog.askopenfilename(
-            title="会話履歴ファイル（JSON）を選択してください",
-            defaultextension=".json",
-            filetypes=[("JSON files", "*.json"), ("All files", "*.*")]
+            title="会話履歴ファイル（ZIP）を選択してください",
+            defaultextension=".zip",
+            filetypes=[("ZIP files", "*.zip"), ("All files", "*.*")]
         )
         if not file_path:
             return
         try:
-            with open(file_path, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-            conversation = data.get("conversation", data)
-            if not isinstance(conversation, list):
-                raise ValueError("不正な会話履歴ファイルです（conversationがリストではありません）")
-            new_history = []
-            for msg in conversation:
-                if not isinstance(msg, dict) or "role" not in msg or "content" not in msg:
-                    raise ValueError("不正な会話履歴ファイルです（メッセージ形式エラー）")
-                if msg["role"] == "assistant":
-                    new_history.append({
-                        "role": "assistant",
-                        "content": self.markdown_to_text(msg.get("content", "")),
-                        "markdown": msg.get("content", "")
-                    })
-                else:
-                    user_msg = {"role": "user", "content": msg["content"]}
-                    if "image_path" in msg:
-                        user_msg["image_path"] = msg["image_path"]
-                    new_history.append(user_msg)
-            self.conversation_history = new_history
-            self.update_history_display()
-            last_assistant = next((m for m in reversed(self.conversation_history) if m["role"] == "assistant"), None)
-            if last_assistant:
-                self.history_text.config(state=tk.NORMAL)
-                self.history_text.delete("1.0", tk.END)
-                self.history_text.insert(tk.END, f"【回答 {len(self.conversation_history)}】\n", "assistant")
-                self.history_text.insert(tk.END, f"{last_assistant['content']}\n\n", "assistant_content")
-                self.history_text.config(state=tk.DISABLED)
-                self.history_text.master.grid()
-            else:
-                self.history_text.config(state=tk.NORMAL)
-                self.history_text.delete("1.0", tk.END)
-                self.history_text.config(state=tk.DISABLED)
-                self.history_text.master.grid_remove()
-            messagebox.showinfo("インポート完了", "会話履歴を再開しました。")
+            with zipfile.ZipFile(file_path, 'r') as zipf:
+                # 既存の一時ディレクトリがあればクリーンアップ
+                if self._imported_tempdir is not None:
+                    self._imported_tempdir.cleanup()
+                self._imported_tempdir = tempfile.TemporaryDirectory()
+                tmpdir_name = self._imported_tempdir.name
+                zipf.extractall(tmpdir_name)
+                # JSONファイル名を自動検出
+                json_name = None
+                for name in zipf.namelist():
+                    if name.endswith('.json') and not name.startswith('img/'):
+                        json_name = name
+                        break
+                if not json_name:
+                    raise ValueError("ZIP内にJSONファイルが見つかりません")
+                json_path = os.path.join(tmpdir_name, json_name)
+                with open(json_path, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                conversation = data.get("conversation", data)
+                if not isinstance(conversation, list):
+                    raise ValueError("不正な会話履歴ファイルです（conversationがリストではありません）")
+                new_history = []
+                for msg in conversation:
+                    if not isinstance(msg, dict) or "role" not in msg or "content" not in msg:
+                        raise ValueError("不正な会話履歴ファイルです（メッセージ形式エラー）")
+                    if msg["role"] == "assistant":
+                        new_history.append({
+                            "role": "assistant",
+                            "content": self.markdown_to_text(msg.get("content", "")),
+                            "markdown": msg.get("content", "")
+                        })
+                    else:
+                        user_msg = {"role": "user", "content": msg["content"]}
+                        if "image_path" in msg:
+                            # img/パスを絶対パスに変換
+                            img_rel = msg["image_path"]
+                            img_abs = os.path.join(tmpdir_name, img_rel)
+                            user_msg["image_path"] = img_abs
+                        new_history.append(user_msg)
+                self.conversation_history = new_history
+                self.update_history_display()
+                messagebox.showinfo("インポート完了", "会話履歴を再開しました。")
         except Exception as e:
             messagebox.showerror("インポートエラー", f"会話履歴のインポートに失敗しました:\n{str(e)}")
 
