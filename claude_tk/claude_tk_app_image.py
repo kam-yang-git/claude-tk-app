@@ -8,6 +8,11 @@ import base64
 from dotenv import load_dotenv
 from PIL import Image, ImageTk
 import io
+import json
+import tempfile
+import shutil
+import zipfile
+from datetime import datetime
 
 class ClaudeChatApp:
     def __init__(self, root):
@@ -29,6 +34,9 @@ class ClaudeChatApp:
         # 画像関連の変数
         self.selected_image_path = None
         self.image_data = None
+        
+        # Q&A履歴（単一問答用）
+        self.qa_history = []
         
         self.setup_ui()
         self.center_window()
@@ -238,7 +246,7 @@ class ClaudeChatApp:
         self.exit_button = ttk.Button(
             button_frame, 
             text="終了する", 
-            command=self.root.destroy
+            command=self.exit_application
         )
         self.exit_button.pack(side=tk.LEFT)
         
@@ -260,6 +268,7 @@ class ClaudeChatApp:
             content = [{"type": "text", "text": question}]
             
             # 画像がある場合は追加
+            image_path = None
             if self.image_data:
                 # 画像のMIMEタイプを判定
                 file_extension = os.path.splitext(self.selected_image_path)[1].lower()
@@ -281,6 +290,7 @@ class ClaudeChatApp:
                         "data": self.image_data
                     }
                 })
+                image_path = self.selected_image_path
             
             # APIリクエスト
             message = self.client.messages.create(
@@ -304,6 +314,13 @@ class ClaudeChatApp:
             self.answer_text.delete("1.0", tk.END)
             self.answer_text.insert("1.0", plain_text)
             self.answer_text.config(state=tk.DISABLED)
+            
+            # Q&A履歴を保存
+            self.qa_history = [{
+                "question": question,
+                "answer": answer,
+                "image_path": image_path
+            }]
                 
         except Exception as e:
             messagebox.showerror("エラー", f"通信エラー: {str(e)}")
@@ -312,15 +329,173 @@ class ClaudeChatApp:
             self.send_button.config(state=tk.NORMAL)
             self.root.config(cursor="")
     
+    def ask_save_format(self):
+        win = tk.Toplevel(self.root)
+        win.title("保存形式の選択")
+        win.grab_set()
+        win.geometry("320x160")
+        win.update_idletasks()
+        w = win.winfo_width()
+        h = win.winfo_height()
+        x = (win.winfo_screenwidth() // 2) - (w // 2)
+        y = (win.winfo_screenheight() // 2) - (h // 2)
+        win.geometry(f"320x160+{x}+{y}")
+        label = ttk.Label(win, text="Q&Aの保存形式を選択してください:")
+        label.pack(pady=10)
+        var = tk.StringVar(value="markdown")
+        rb1 = ttk.Radiobutton(win, text="Markdown形式で保存", variable=var, value="markdown")
+        rb2 = ttk.Radiobutton(win, text="JSON形式で保存", variable=var, value="json")
+        rb3 = ttk.Radiobutton(win, text="両方保存", variable=var, value="both")
+        rb1.pack(anchor=tk.W, padx=30)
+        rb2.pack(anchor=tk.W, padx=30)
+        rb3.pack(anchor=tk.W, padx=30)
+        result = {"value": None}
+        def ok():
+            result["value"] = var.get()
+            win.destroy()
+        def cancel():
+            result["value"] = None
+            win.destroy()
+        btn_frame = ttk.Frame(win)
+        btn_frame.pack(pady=10)
+        ttk.Button(btn_frame, text="OK", command=ok).pack(side=tk.LEFT, padx=10)
+        ttk.Button(btn_frame, text="キャンセル", command=cancel).pack(side=tk.LEFT)
+        win.wait_window()
+        return result["value"]
+
+    def save_qa_history(self):
+        if not self.qa_history:
+            return False
+        save_type = self.ask_save_format()
+        if save_type is None:
+            return False
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        default_json = f"qa_{timestamp}.json"
+        default_md = f"qa_{timestamp}.md"
+        default_json_zip = f"qa_{timestamp}_json.zip"
+        default_md_zip = f"qa_{timestamp}_md.zip"
+        result = True
+        qa = self.qa_history[0]
+        if save_type in ("json", "both"):
+            file_path = filedialog.asksaveasfilename(
+                title="Q&AをZIPで保存",
+                defaultextension=".zip",
+                filetypes=[("ZIP files", "*.zip"), ("All files", "*.*")],
+                initialfile=default_json_zip
+            )
+            if file_path:
+                try:
+                    with tempfile.TemporaryDirectory() as tmpdir:
+                        img_dir = os.path.join(tmpdir, "img")
+                        os.makedirs(img_dir, exist_ok=True)
+                        save_data = {
+                            "metadata": {
+                                "created_at": datetime.now().isoformat(),
+                                "model": self.model
+                            },
+                            "qa": {
+                                "question": qa["question"],
+                                "answer": qa["answer"]
+                            }
+                        }
+                        if qa["image_path"]:
+                            img_filename = os.path.basename(qa["image_path"])
+                            img_dst = os.path.join(img_dir, img_filename)
+                            shutil.copy2(qa["image_path"], img_dst)
+                            save_data["qa"]["image_path"] = f"img/{img_filename}"
+                        json_path = os.path.join(tmpdir, default_json)
+                        with open(json_path, 'w', encoding='utf-8') as f:
+                            json.dump(save_data, f, ensure_ascii=False, indent=2)
+                        with zipfile.ZipFile(file_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                            zipf.write(json_path, arcname=default_json)
+                            for root, _, files in os.walk(img_dir):
+                                for fname in files:
+                                    fpath = os.path.join(root, fname)
+                                    arcname = os.path.relpath(fpath, tmpdir)
+                                    zipf.write(fpath, arcname=arcname)
+                except Exception as e:
+                    messagebox.showerror("保存エラー", f"ZIP保存に失敗しました:\n{str(e)}")
+                    result = False
+            elif save_type == "json":
+                return False
+        if save_type in ("markdown", "both"):
+            file_path = filedialog.asksaveasfilename(
+                title="Q&AをMarkdown ZIPで保存",
+                defaultextension=".zip",
+                filetypes=[("ZIP files", "*.zip"), ("All files", "*.*")],
+                initialfile=default_md_zip
+            )
+            if file_path:
+                try:
+                    with tempfile.TemporaryDirectory() as tmpdir:
+                        md_name = os.path.splitext(os.path.basename(file_path))[0] + ".md"
+                        md_path = os.path.join(tmpdir, md_name)
+                        img_dir = os.path.join(tmpdir, "img")
+                        os.makedirs(img_dir, exist_ok=True)
+                        md_lines = [f"# 質問\n{qa['question']}"]
+                        if qa["image_path"]:
+                            img_filename = os.path.basename(qa["image_path"])
+                            img_dst = os.path.join(img_dir, img_filename)
+                            try:
+                                if not os.path.exists(img_dst):
+                                    shutil.copy2(qa["image_path"], img_dst)
+                                md_lines.append(f"![添付画像](img/{img_filename})")
+                            except Exception as e:
+                                md_lines.append(f"[画像保存エラー: {img_filename}]")
+                        md_lines.append(f"\n# 回答\n{qa['answer']}")
+                        with open(md_path, 'w', encoding='utf-8') as f:
+                            f.write('\n'.join(md_lines))
+                        with zipfile.ZipFile(file_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                            zipf.write(md_path, arcname=md_name)
+                            for root, _, files in os.walk(img_dir):
+                                for fname in files:
+                                    fpath = os.path.join(root, fname)
+                                    arcname = os.path.relpath(fpath, tmpdir)
+                                    zipf.write(fpath, arcname=arcname)
+                except Exception as e:
+                    messagebox.showerror("保存エラー", f"Markdown ZIP保存に失敗しました:\n{str(e)}")
+                    result = False
+            elif save_type == "markdown":
+                return False
+        if result:
+            messagebox.showinfo("保存完了", "Q&Aを保存しました。")
+        return result
+
+    def prompt_save_qa(self, action_name):
+        if not self.qa_history:
+            return True
+        result = messagebox.askyesnocancel(
+            "Q&Aの保存",
+            f"{action_name}前にQ&Aを保存しますか？\n\n"
+            f"「はい」: 保存してから{action_name}\n"
+            f"「いいえ」: 保存せずに{action_name}\n"
+            f"「キャンセル」: {action_name}をキャンセル"
+        )
+        if result is None:
+            return False
+        elif result:
+            return self.save_qa_history()
+        else:
+            return True
+
     def new_question(self):
+        # 保存確認
+        if not self.prompt_save_qa("新しい質問"):
+            return
         # 質問欄と回答欄をリセット
         self.question_text.delete("1.0", tk.END)
         self.answer_text.config(state=tk.NORMAL)
         self.answer_text.delete("1.0", tk.END)
         self.answer_text.config(state=tk.DISABLED)
-        
         # 画像もリセット
         self.remove_image()
+        # Q&A履歴もリセット
+        self.qa_history = []
+
+    def exit_application(self):
+        if not self.prompt_save_qa("終了"):
+            return
+        self.root.destroy()
 
 def main():
     root = tk.Tk()

@@ -1,10 +1,12 @@
 import tkinter as tk
-from tkinter import ttk, scrolledtext, messagebox
+from tkinter import ttk, scrolledtext, messagebox, filedialog, simpledialog
 import os
 import anthropic
 import markdown
 import re
 from dotenv import load_dotenv
+import json
+from datetime import datetime
 
 class ClaudeChatApp:
     def __init__(self, root):
@@ -147,7 +149,7 @@ class ClaudeChatApp:
         self.exit_button = ttk.Button(
             button_frame, 
             text="終了する", 
-            command=self.root.destroy
+            command=self.on_exit
         )
         self.exit_button.pack(side=tk.LEFT)
         
@@ -196,11 +198,129 @@ class ClaudeChatApp:
             self.root.config(cursor="")
     
     def new_question(self):
-        # 質問欄と回答欄をリセット
+        # 質問欄と回答欄をリセット前に保存確認
+        if not self.prompt_save_conversation("新しい質問"):
+            return
         self.question_text.delete("1.0", tk.END)
         self.answer_text.config(state=tk.NORMAL)
         self.answer_text.delete("1.0", tk.END)
         self.answer_text.config(state=tk.DISABLED)
+    
+    def ask_save_format(self):
+        """保存形式を選択するダイアログ（multiと同じUI）"""
+        win = tk.Toplevel(self.root)
+        win.title("保存形式の選択")
+        win.grab_set()
+        win.geometry("320x160")
+        win.update_idletasks()
+        w = win.winfo_width()
+        h = win.winfo_height()
+        x = (win.winfo_screenwidth() // 2) - (w // 2)
+        y = (win.winfo_screenheight() // 2) - (h // 2)
+        win.geometry(f"320x160+{x}+{y}")
+        label = ttk.Label(win, text="保存形式を選択してください:")
+        label.pack(pady=10)
+        var = tk.StringVar(value="markdown")
+        rb1 = ttk.Radiobutton(win, text="Markdown形式で保存", variable=var, value="markdown")
+        rb2 = ttk.Radiobutton(win, text="JSON形式で保存", variable=var, value="json")
+        rb3 = ttk.Radiobutton(win, text="両方保存", variable=var, value="both")
+        rb1.pack(anchor=tk.W, padx=30)
+        rb2.pack(anchor=tk.W, padx=30)
+        rb3.pack(anchor=tk.W, padx=30)
+        result = {"value": None}
+        def ok():
+            result["value"] = var.get()
+            win.destroy()
+        def cancel():
+            result["value"] = None
+            win.destroy()
+        btn_frame = ttk.Frame(win)
+        btn_frame.pack(pady=10)
+        ttk.Button(btn_frame, text="OK", command=ok).pack(side=tk.LEFT, padx=10)
+        ttk.Button(btn_frame, text="キャンセル", command=cancel).pack(side=tk.LEFT)
+        win.wait_window()
+        return result["value"]
+
+    def save_conversation_history(self, question, answer):
+        """質問・回答をファイルに保存（Markdown/JSON/両方選択可）"""
+        if not question and not answer:
+            return False
+        save_type = self.ask_save_format()
+        if save_type is None:
+            return False
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        default_json = f"claude_simple_{timestamp}.json"
+        default_md = f"claude_simple_{timestamp}.md"
+        result = True
+        if save_type in ("json", "both"):
+            file_path = filedialog.asksaveasfilename(
+                title="質問・回答をJSONで保存",
+                defaultextension=".json",
+                filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
+                initialfile=default_json
+            )
+            if file_path:
+                try:
+                    save_data = {
+                        "metadata": {
+                            "created_at": datetime.now().isoformat(),
+                            "model": self.model
+                        },
+                        "question": question,
+                        "answer": answer
+                    }
+                    with open(file_path, 'w', encoding='utf-8') as f:
+                        json.dump(save_data, f, ensure_ascii=False, indent=2)
+                except Exception as e:
+                    messagebox.showerror("保存エラー", f"JSON保存に失敗しました:\n{str(e)}")
+                    result = False
+            elif save_type == "json":
+                return False
+        if save_type in ("markdown", "both"):
+            file_path = filedialog.asksaveasfilename(
+                title="質問・回答をMarkdownで保存",
+                defaultextension=".md",
+                filetypes=[("Markdown files", "*.md"), ("All files", "*.*")],
+                initialfile=default_md
+            )
+            if file_path:
+                try:
+                    md_lines = [f"# 質問\n{question}\n\n# 回答\n{answer}\n"]
+                    with open(file_path, 'w', encoding='utf-8') as f:
+                        f.write('\n'.join(md_lines))
+                except Exception as e:
+                    messagebox.showerror("保存エラー", f"Markdown保存に失敗しました:\n{str(e)}")
+                    result = False
+            elif save_type == "markdown":
+                return False
+        if result:
+            messagebox.showinfo("保存完了", "保存しました。")
+        return result
+
+    def prompt_save_conversation(self, action_name):
+        """保存確認ダイアログ（multiと同じUI）"""
+        question = self.question_text.get("1.0", tk.END).strip()
+        answer = self.answer_text.get("1.0", tk.END).strip()
+        if not question and not answer:
+            return True
+        result = messagebox.askyesnocancel(
+            "保存確認",
+            f"{action_name}前に質問・回答を保存しますか？\n\n"
+            f"「はい」: 保存してから{action_name}\n"
+            f"「いいえ」: 保存せずに{action_name}\n"
+            f"「キャンセル」: {action_name}をキャンセル"
+        )
+        if result is None:
+            return False
+        elif result:
+            return self.save_conversation_history(question, answer)
+        else:
+            return True
+    
+    def on_exit(self):
+        if not self.prompt_save_conversation("終了"):
+            return
+        self.root.destroy()
 
 def main():
     root = tk.Tk()
