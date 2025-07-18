@@ -1,7 +1,9 @@
 import unittest
 from unittest.mock import patch, MagicMock, mock_open
 import tkinter as tk
+import sys
 import os
+import json
 from datetime import datetime
 
 # テスト対象のモジュールをインポート

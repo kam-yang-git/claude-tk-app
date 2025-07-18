@@ -1,7 +1,9 @@
 import unittest
 from unittest.mock import patch, MagicMock, mock_open
 import tkinter as tk
+import sys
 import os
+import json
 
 # claude_tk_app_multi.pyのClaudeChatAppをimport
 from claude_tk.claude_tk_app_multi import ClaudeChatApp

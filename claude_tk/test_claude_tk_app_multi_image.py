@@ -2,6 +2,7 @@ import unittest
 from unittest.mock import patch, MagicMock, mock_open
 import os
 import tempfile
+import shutil
 import json
 from claude_tk.claude_tk_app_multi_image import ClaudeChatApp
 

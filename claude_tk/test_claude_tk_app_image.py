@@ -3,6 +3,9 @@ from unittest.mock import patch, MagicMock, mock_open
 import os
 import sys
 import base64
+import tempfile
+import shutil
+import json
 from datetime import datetime
 
 # claude_tk_app_image.pyのClaudeChatAppをimport
