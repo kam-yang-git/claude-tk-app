@@ -291,7 +291,6 @@ class ClaudeChatApp:
             self.history_text.config(state=tk.NORMAL)
             self.history_text.delete("1.0", tk.END)
             self.history_text.config(state=tk.DISABLED)
-            self.history_text.master.grid_remove()
             self.remove_image()
 
     def save_conversation_history(self):

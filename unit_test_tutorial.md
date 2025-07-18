@@ -94,6 +94,31 @@ TOTAL                                 480     35    93%
 
 ## 6. 各テストコードの解説
 
+### claude_tk/test_claude_tk_app_simple.py のテスト関数解説
+
+- **test_markdown_to_text_basic**
+  - Markdown形式のテキストが正しく変換されるかをテストします。
+- **test_center_window**
+  - ウィンドウの中央寄せ処理で例外が発生しないかをテストします。
+- **test_setup_ui**
+  - UIセットアップ処理で例外が発生しないかをテストします。
+- **test_send_question_empty**
+  - 質問欄が空のまま送信しようとした場合、警告ダイアログが表示されるかをテストします。
+- **test_send_question_api_error**
+  - 質問送信時にAPIエラーが発生した場合、エラーダイアログが表示されるかをテストします。
+- **test_save_conversation_history_json/markdown**
+  - 質問・回答をJSON/Markdown形式で保存した場合、ファイルが正しく作成されるかをテストします。
+- **test_prompt_save_conversation_yes/no/cancel**
+  - 履歴保存確認ダイアログで「はい」「いいえ」「キャンセル」を選んだ場合の挙動をテストします。
+- **test_new_question**
+  - 新しい質問ボタンで、入力欄や回答欄がリセットされるかをテストします。
+- **test_on_exit**
+  - アプリ終了時にウィンドウが閉じるかをテストします。
+- **test_ask_save_format_cancel**
+  - 保存形式選択ダイアログでキャンセルした場合の挙動をテストします。
+
+---
+
 ### claude_tk/test_claude_tk_app_image.py のテスト関数解説
 
 - **test_markdown_to_text_basic**
@@ -133,41 +158,6 @@ TOTAL                                 480     35    93%
 
 ---
 
-### claude_tk/test_claude_tk_app_multi_image.py のテスト関数解説
-
-- **test_markdown_to_text_basic**
-  - Markdown形式のテキストが正しく変換されるかをテストします。
-- **test_get_mime_type**
-  - 画像ファイルの拡張子からMIMEタイプが正しく判定されるかをテストします。
-- **test_save_conversation_history_empty**
-  - 履歴が空のとき、保存処理がスキップされるかをテストします。
-- **test_update_history_display_no_error**
-  - 履歴が空でも履歴表示の更新でエラーが出ないかをテストします。
-- **test_prompt_save_conversation_cancel/yes/no**
-  - 履歴保存確認ダイアログでキャンセル/はい/いいえを選んだ場合の挙動をテストします。
-- **test_resume_conversation_json_import**
-  - ZIPファイルから会話履歴（JSON）が正しく復元されるかをテストします。
-- **test_ask_save_format_ok**
-  - 保存形式選択ダイアログでOKを押した場合の挙動をテストします。
-- **test_attach_image_cancel**
-  - 画像添付ダイアログでキャンセルした場合、画像パスがセットされないかをテストします。
-- **test_attach_image_error**
-  - 画像添付時に画像ファイルの読み込みでエラーが発生した場合、エラーダイアログが表示されるかをテストします。
-- **test_remove_image**
-  - 添付画像の削除ボタンで画像パスがリセットされるかをテストします。
-- **test_clear_conversation_empty/confirm_yes/confirm_no**
-  - 履歴クリア時、履歴が空/確認ダイアログで「はい」/「いいえ」を選んだ場合の挙動をテストします。
-- **test_update_history_display_image_error**
-  - 履歴表示時、画像の読み込みでエラーが発生しても例外にならないかをテストします。
-- **test_send_question_empty**
-  - 質問欄が空のまま送信しようとした場合、警告ダイアログが表示されるかをテストします。
-- **test_send_question_api_error**
-  - 質問送信時にAPIエラーが発生した場合、エラーダイアログが表示されるかをテストします。
-- **test_resume_conversation_no_json/invalid_conversation/invalid_message**
-  - ZIPファイルにJSONがない/不正な形式/不正なメッセージの場合、エラーダイアログが表示されるかをテストします。
-
----
-
 ### claude_tk/test_claude_tk_app_multi.py のテスト関数解説
 
 - **test_markdown_to_text_basic**
@@ -195,28 +185,44 @@ TOTAL                                 480     35    93%
 
 ---
 
-### claude_tk/test_claude_tk_app_simple.py のテスト関数解説
+### claude_tk/test_claude_tk_app_multi_image.py のテスト関数解説
 
 - **test_markdown_to_text_basic**
   - Markdown形式のテキストが正しく変換されるかをテストします。
-- **test_center_window**
-  - ウィンドウの中央寄せ処理で例外が発生しないかをテストします。
-- **test_setup_ui**
-  - UIセットアップ処理で例外が発生しないかをテストします。
+- **test_get_mime_type**
+  - 画像ファイルの拡張子からMIMEタイプが正しく判定されるかをテストします。
+- **test_save_conversation_history_json/markdown/both**
+  - 会話履歴をJSON（ZIP）形式、Markdown（ZIP）形式、両方で保存した場合に、ファイルが正しく作成されるかをテストします。
+  - 画像付き履歴も含めて保存できるかを確認します。
+  - 保存完了時のポップアップ（messagebox.showinfo）がテスト中に表示されないようpatchしています。
+- **test_save_conversation_history_save_type_none/no_conversation**
+  - 保存形式が選択されなかった場合や、履歴が空の場合に保存処理がスキップされるかをテストします。
+- **test_ask_save_format_options**
+  - 保存形式選択ダイアログで「markdown」「json」「both」「キャンセル」など各選択肢を選んだ場合の挙動をテストします。
+- **test_save_conversation_history_zip_error/markdown_error**
+  - 保存時にZIPファイル作成でエラーが発生した場合、エラーダイアログが表示されるかをテストします。
+- **test_update_history_display_no_error**
+  - 履歴が空でも履歴表示の更新でエラーが出ないかをテストします。
+- **test_prompt_save_conversation_cancel/yes/no**
+  - 履歴保存確認ダイアログでキャンセル/はい/いいえを選んだ場合の挙動をテストします。
+- **test_resume_conversation_json_import**
+  - ZIPファイルから会話履歴（JSON）が正しく復元されるかをテストします。
+- **test_attach_image_cancel**
+  - 画像添付ダイアログでキャンセルした場合、画像パスがセットされないかをテストします。
+- **test_attach_image_error**
+  - 画像添付時に画像ファイルの読み込みでエラーが発生した場合、エラーダイアログが表示されるかをテストします。
+- **test_remove_image**
+  - 添付画像の削除ボタンで画像パスがリセットされるかをテストします。
+- **test_clear_conversation_empty/confirm_yes/confirm_no**
+  - 履歴クリア時、履歴が空/確認ダイアログで「はい」/「いいえ」を選んだ場合の挙動をテストします。
+- **test_update_history_display_image_error**
+  - 履歴表示時、画像の読み込みでエラーが発生しても例外にならないかをテストします。
 - **test_send_question_empty**
   - 質問欄が空のまま送信しようとした場合、警告ダイアログが表示されるかをテストします。
 - **test_send_question_api_error**
   - 質問送信時にAPIエラーが発生した場合、エラーダイアログが表示されるかをテストします。
-- **test_save_conversation_history_json/markdown**
-  - 質問・回答をJSON/Markdown形式で保存した場合、ファイルが正しく作成されるかをテストします。
-- **test_prompt_save_conversation_yes/no/cancel**
-  - 履歴保存確認ダイアログで「はい」「いいえ」「キャンセル」を選んだ場合の挙動をテストします。
-- **test_new_question**
-  - 新しい質問ボタンで、入力欄や回答欄がリセットされるかをテストします。
-- **test_on_exit**
-  - アプリ終了時にウィンドウが閉じるかをテストします。
-- **test_ask_save_format_cancel**
-  - 保存形式選択ダイアログでキャンセルした場合の挙動をテストします。
+- **test_resume_conversation_no_json/invalid_conversation/invalid_message**
+  - ZIPファイルにJSONがない/不正な形式/不正なメッセージの場合、エラーダイアログが表示されるかをテストします。
 
 ---
 

@@ -226,5 +226,101 @@ class TestClaudeChatApp(unittest.TestCase):
                 self.app.resume_conversation()
                 mock_err.assert_called()
 
+    def test_save_conversation_history_json(self):
+        self.app.conversation_history = [
+            {"role": "user", "content": "Q", "image_path": __file__},
+            {"role": "assistant", "content": "A", "markdown": "A_md"}
+        ]
+        with patch.object(self.app, 'ask_save_format', return_value="json"), \
+             patch('tkinter.filedialog.asksaveasfilename', return_value="/tmp/test.zip"), \
+             patch('tempfile.TemporaryDirectory') as mock_tmpdir, \
+             patch('shutil.copy2'), \
+             patch('zipfile.ZipFile') as mock_zip, \
+             patch('builtins.open', mock_open()), \
+             patch('tkinter.messagebox.showinfo'):
+            mock_tmpdir.return_value.__enter__.return_value = "/tmp/tmpdir"
+            mock_tmpdir.return_value.__exit__.return_value = False
+            self.assertTrue(self.app.save_conversation_history())
+            mock_zip.assert_called()
+
+    def test_save_conversation_history_markdown(self):
+        self.app.conversation_history = [
+            {"role": "user", "content": "Q", "image_path": __file__},
+            {"role": "assistant", "content": "A", "markdown": "A_md"}
+        ]
+        with patch.object(self.app, 'ask_save_format', return_value="markdown"), \
+             patch('tkinter.filedialog.asksaveasfilename', return_value="/tmp/test.zip"), \
+             patch('tempfile.TemporaryDirectory') as mock_tmpdir, \
+             patch('shutil.copy2'), \
+             patch('zipfile.ZipFile') as mock_zip, \
+             patch('builtins.open', mock_open()), \
+             patch('tkinter.messagebox.showinfo'):
+            mock_tmpdir.return_value.__enter__.return_value = "/tmp/tmpdir"
+            mock_tmpdir.return_value.__exit__.return_value = False
+            self.assertTrue(self.app.save_conversation_history())
+            mock_zip.assert_called()
+
+    def test_save_conversation_history_both(self):
+        self.app.conversation_history = [
+            {"role": "user", "content": "Q", "image_path": __file__},
+            {"role": "assistant", "content": "A", "markdown": "A_md"}
+        ]
+        with patch.object(self.app, 'ask_save_format', return_value="both"), \
+             patch('tkinter.filedialog.asksaveasfilename', side_effect=["/tmp/test1.zip", "/tmp/test2.zip"]), \
+             patch('tempfile.TemporaryDirectory') as mock_tmpdir, \
+             patch('shutil.copy2'), \
+             patch('zipfile.ZipFile') as mock_zip, \
+             patch('builtins.open', mock_open()), \
+             patch('tkinter.messagebox.showinfo'):
+            mock_tmpdir.return_value.__enter__.return_value = "/tmp/tmpdir"
+            mock_tmpdir.return_value.__exit__.return_value = False
+            self.assertTrue(self.app.save_conversation_history())
+            self.assertGreaterEqual(mock_zip.call_count, 2)
+
+    def test_save_conversation_history_save_type_none(self):
+        self.app.conversation_history = [{"role": "user", "content": "Q"}]
+        with patch.object(self.app, 'ask_save_format', return_value=None):
+            self.assertFalse(self.app.save_conversation_history())
+
+    def test_save_conversation_history_no_conversation(self):
+        self.app.conversation_history = []
+        self.assertFalse(self.app.save_conversation_history())
+
+    def test_ask_save_format_options(self):
+        # ask_save_formatの選択肢("markdown", "json", "both")をテスト
+        for val in ["markdown", "json", "both", None]:
+            with patch('tkinter.Toplevel'), \
+                 patch('tkinter.StringVar', return_value=MagicMock(get=lambda: val)):
+                with patch('tkinter.Toplevel.wait_window', return_value=None):
+                    self.assertIn(self.app.ask_save_format(), ["markdown", "json", "both", None])
+
+    def test_save_conversation_history_zip_error(self):
+        self.app.conversation_history = [{"role": "user", "content": "Q", "image_path": __file__}]
+        with patch.object(self.app, 'ask_save_format', return_value="json"), \
+             patch('tkinter.filedialog.asksaveasfilename', return_value="/tmp/test.zip"), \
+             patch('tempfile.TemporaryDirectory') as mock_tmpdir, \
+             patch('shutil.copy2'), \
+             patch('zipfile.ZipFile', side_effect=OSError("zip error")), \
+             patch('builtins.open', mock_open()), \
+             patch('tkinter.messagebox.showerror') as mock_err:
+            mock_tmpdir.return_value.__enter__.return_value = "/tmp/tmpdir"
+            mock_tmpdir.return_value.__exit__.return_value = False
+            self.assertFalse(self.app.save_conversation_history())
+            mock_err.assert_called()
+
+    def test_save_conversation_history_markdown_error(self):
+        self.app.conversation_history = [{"role": "user", "content": "Q", "image_path": __file__}]
+        with patch.object(self.app, 'ask_save_format', return_value="markdown"), \
+             patch('tkinter.filedialog.asksaveasfilename', return_value="/tmp/test.zip"), \
+             patch('tempfile.TemporaryDirectory') as mock_tmpdir, \
+             patch('shutil.copy2'), \
+             patch('zipfile.ZipFile', side_effect=OSError("zip error")), \
+             patch('builtins.open', mock_open()), \
+             patch('tkinter.messagebox.showerror') as mock_err:
+            mock_tmpdir.return_value.__enter__.return_value = "/tmp/tmpdir"
+            mock_tmpdir.return_value.__exit__.return_value = False
+            self.assertFalse(self.app.save_conversation_history())
+            mock_err.assert_called()
+
 if __name__ == '__main__':
     unittest.main() 
