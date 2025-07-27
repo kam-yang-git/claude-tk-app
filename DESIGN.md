@@ -13,12 +13,25 @@ graph TD
 
 ## 2. 機能一覧
 
+### 通常版アプリケーション
+
 | バージョン | テキスト質問 | 画像添付 | 会話履歴 | 履歴保存 | 履歴再開（復元） |
 |:---|:---:|:---:|:---:|:---:|:---:|
 | claude_tk_app_simple.py | ○ | × | × | ○ | × |
 | claude_tk_app_image.py | ○ | ○ | × | ○ | × |
 | claude_tk_app_multi.py | ○ | × | ○ | ○ | ○ |
 | claude_tk_app_multi_image.py | ○ | ○ | ○ | ○ | ○ |
+
+### セレクタブル版アプリケーション
+
+各バージョンには、アプリケーション起動時にバージョンを選択できるセレクタブル版があります。
+
+| セレクタブル版 | 対応する通常版 | 機能 |
+|:---|:---|:---|
+| claude_selectable_simple.py | claude_tk_app_simple.py | シンプル版のセレクタブル版 |
+| claude_selectable_image.py | claude_tk_app_image.py | 画像対応版のセレクタブル版 |
+| claude_selectable_multi.py | claude_tk_app_multi.py | マルチターン版のセレクタブル版 |
+| claude_selectable_multi_image.py | claude_tk_app_multi_image.py | マルチターン＋画像対応版のセレクタブル版 |
 
 ### 共通機能
 - Anthropic Claude APIとの連携（APIキーは.envから取得）
@@ -32,6 +45,11 @@ graph TD
 - **画像対応版**: 画像添付・プレビュー・画像付き質問。履歴保存時は画像は保存対象外。
 - **マルチターン版**: 会話履歴の保持・保存・再開。
 - **マルチターン＋画像対応版**: 画像付き会話履歴の保存・復元（zip形式）。
+
+### セレクタブル版の特徴
+- アプリケーション起動時にバージョン選択ダイアログが表示されます
+- 選択したバージョンの機能を利用できます
+- 通常版と同じ機能を持ちます
 
 ## 3. 画面構成（例: 画像対応版）
 

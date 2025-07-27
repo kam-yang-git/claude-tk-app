@@ -1,10 +1,12 @@
 # Claude Chat Desktop App
 
-TkinterとClaude APIを使用したデスクトップチャットアプリケーションです。シンプル版・画像対応版・会話履歴対応版（マルチターン）・画像対応版（マルチターン）の4つのバージョンがあります。
+TkinterとClaude APIを使用したデスクトップチャットアプリケーションです。シンプル版・画像対応版・会話履歴対応版（マルチターン）・画像対応版（マルチターン）の4つのバージョンがあります。各バージョンには通常版とセレクタブル版があります。
 
 ## アプリケーション一覧
 
-### 1. シンプル版 (`claude_tk_app_simple.py`)
+### 通常版アプリケーション
+
+#### 1. シンプル版 (`claude_tk_app_simple.py`)
 テキストのみの質問・回答ができる基本的なチャットアプリです。
 
 **機能:**
@@ -18,7 +20,7 @@ TkinterとClaude APIを使用したデスクトップチャットアプリケー
 - .env未設定やAPIキー未設定時はエラー表示してアプリ終了
 - 質問・回答ペアの履歴をMarkdown/JSON/両方で保存可能
 
-### 2. 画像対応版 (`claude_tk_app_image.py`)
+#### 2. 画像対応版 (`claude_tk_app_image.py`)
 画像を添付して質問できる高度なチャットアプリです。
 
 **機能:**
@@ -33,7 +35,7 @@ TkinterとClaude APIを使用したデスクトップチャットアプリケー
 - .env未設定やAPIキー未設定時はエラー表示してアプリ終了
 - 質問・回答ペアの履歴をMarkdown/JSON/両方で保存可能（画像も保存対象）
 
-### 3. 会話履歴・マルチターン版 (`claude_tk_app_multi.py`)
+#### 3. 会話履歴・マルチターン版 (`claude_tk_app_multi.py`)
 複数回の質問・回答を会話履歴として保持し、文脈を維持したままやりとりできるチャットアプリです。
 
 **機能:**
@@ -44,7 +46,7 @@ TkinterとClaude APIを使用したデスクトップチャットアプリケー
 - 「会話をクリア」「会話を再開」ボタン
 - **Ctrl+Enter**で質問送信
 
-### 4. マルチターン＋画像対応版 (`claude_tk_app_multi_image.py`)
+#### 4. マルチターン＋画像対応版 (`claude_tk_app_multi_image.py`)
 画像添付と会話履歴（マルチターン）を両立した最上位版です。
 
 **機能:**
@@ -56,6 +58,21 @@ TkinterとClaude APIを使用したデスクトップチャットアプリケー
 - 「会話をクリア」「会話を再開」ボタン
 - **Ctrl+Enter**で質問送信
 - .env未設定やAPIキー未設定時はエラー表示してアプリ終了
+
+### セレクタブル版アプリケーション
+
+各バージョンには、アプリケーション起動時にバージョンを選択できるセレクタブル版があります。
+
+#### セレクタブル版ファイル一覧
+- `claude_selectable_simple.py` - シンプル版のセレクタブル版
+- `claude_selectable_image.py` - 画像対応版のセレクタブル版
+- `claude_selectable_multi.py` - マルチターン版のセレクタブル版
+- `claude_selectable_multi_image.py` - マルチターン＋画像対応版のセレクタブル版
+
+**セレクタブル版の特徴:**
+- アプリケーション起動時にバージョン選択ダイアログが表示されます
+- 選択したバージョンの機能を利用できます
+- 通常版と同じ機能を持ちます
 
 ## 起動方法
 
@@ -71,24 +88,48 @@ ANTHROPIC_API_KEY=your_actual_api_key_here
 
 3. アプリケーションを実行:
 
+### 通常版
+
 **シンプル版:**
 ```bash
-python claude_tk_app_simple.py
+python claude_tk/claude_tk_app_simple.py
 ```
 
 **画像対応版:**
 ```bash
-python claude_tk_app_image.py
+python claude_tk/claude_tk_app_image.py
 ```
 
 **会話履歴・マルチターン版:**
 ```bash
-python claude_tk_app_multi.py
+python claude_tk/claude_tk_app_multi.py
 ```
 
 **マルチターン＋画像対応版:**
 ```bash
-python claude_tk_app_multi_image.py
+python claude_tk/claude_tk_app_multi_image.py
+```
+
+### セレクタブル版
+
+**シンプル版のセレクタブル版:**
+```bash
+python claude_tk/claude_selectable_simple.py
+```
+
+**画像対応版のセレクタブル版:**
+```bash
+python claude_tk/claude_selectable_image.py
+```
+
+**マルチターン版のセレクタブル版:**
+```bash
+python claude_tk/claude_selectable_multi.py
+```
+
+**マルチターン＋画像対応版のセレクタブル版:**
+```bash
+python claude_tk/claude_selectable_multi_image.py
 ```
 
 ## 各バージョンの違い
